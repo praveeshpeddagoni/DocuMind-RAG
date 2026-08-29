@@ -1,0 +1,44 @@
+# Virtual Environments & Packages
+.venv/
+backend/.venv/
+venv/
+node_modules/
+frontend/node_modules/
+
+# Secrets & Local Envs
+.env
+*.env
+backend/.env
+frontend/.env
+
+# Build Artifacts & Dist
+frontend/dev-dist/
+dist/
+build/
+
+# Evaluation CSVs / Logs / Test outputs
+*.csv
+backend/*.csv
+*.json
+!frontend/package.json
+!frontend/package-lock.json
+
+# Cache
+__pycache__/
+*.pyc
+.DS_Store
+
+# Database
+*.db
+backend/sql_app.db
+
+# Logs
+*.log
+rag_system.log
+
+# Environment Files
+.env*
+frontend/.env.local
+
+# Junk / Temporary Files
+backend/1.5.0
