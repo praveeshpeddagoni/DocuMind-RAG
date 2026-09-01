@@ -1,434 +1,514 @@
-# 📚 DocuMind AI - Intelligent Document Q&A System
+# DocuMind AI
 
-<div align="center">
+DocuMind AI is an end-to-end document question-answering application built around a hybrid Retrieval-Augmented Generation (RAG) pipeline. Users can upload documents, search their contents, ask questions in natural language, and receive LLM-generated answers grounded in retrieved document context with source information.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.9+-green.svg)
-![React](https://img.shields.io/badge/React-18.0+-61DAFB.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)
-![License](https://img.shields.io/badge/license-MIT-purple.svg)
+## Highlights
 
-**Transform your documents into an intelligent knowledge base with AI-powered search and Q&A**
+- Multi-format document ingestion for PDF, DOCX, TXT, HTML, and Markdown.
+- OCR fallback for image-based PDFs.
+- Recursive character-based chunking with overlap and document metadata.
+- Hybrid retrieval using FAISS dense vector search and BM25 lexical search.
+- Reciprocal Rank Fusion (RRF) to combine dense and lexical retrieval results.
+- Cross-Encoder reranking to improve the final retrieval ordering.
+- Context-aware document Q&A with selectable document filtering.
+- Source attribution for generated answers.
+- LLM provider abstraction with Gemini, OpenAI, and Groq support.
+- Query history and analytics.
+- Multi-document asynchronous processing with WebSocket progress updates.
+- React frontend with document upload, chat, document management, analytics, settings, and PWA support.
+- Dockerized FastAPI backend suitable for deployment on platforms such as Railway.
 
-</div>
+## Architecture
 
----
-
-## 🎯 Overview
-
-**DocuMind AI** is a production-ready **Retrieval-Augmented Generation (RAG)** system that enables intelligent question-answering over your documents. Upload PDFs, Word docs, or text files, and instantly query them using natural language with AI-powered responses backed by actual document sources.
-
-### ✨ Key Highlights
-
-- **🚀 GPU-Accelerated Processing** - FAISS vector search with CUDA support
-- **🤖 Multiple LLM Support** - Groq, OpenAI, Anthropic, and local models
-- **⚡ Real-time Streaming** - WebSocket-based answer streaming
-- **📊 Analytics Dashboard** - Track usage, popular queries, and performance
-- **🔐 Production-Ready** - Secure configuration, rate limiting, and monitoring
-- **📱 Progressive Web App** - Installable, offline-capable frontend
-
-## 🏗️ Architecture
-
+```text
+                         ┌─────────────────────────┐
+                         │      React Frontend     │
+                         │ Upload / Chat / Search  │
+                         │ Docs / Analytics / PWA  │
+                         └────────────┬────────────┘
+                                      │ REST + WebSocket
+                                      ▼
+                         ┌─────────────────────────┐
+                         │      FastAPI Backend    │
+                         │   Routers + Services    │
+                         └────────────┬────────────┘
+                                      │
+                    ┌─────────────────┴─────────────────┐
+                    │                                   │
+                    ▼                                   ▼
+          ┌──────────────────┐                ┌──────────────────┐
+          │ Document Ingest  │                │   PostgreSQL     │
+          │ PDF/DOCX/TXT/    │                │ Metadata / Query │
+          │ HTML/Markdown    │                │    Analytics      │
+          └────────┬─────────┘                └──────────────────┘
+                   │
+                   ▼
+          ┌──────────────────┐
+          │ Text Extraction  │
+          │ + OCR Fallback   │
+          └────────┬─────────┘
+                   │
+                   ▼
+          ┌──────────────────┐
+          │ Recursive        │
+          │ Chunking         │
+          └────────┬─────────┘
+                   │
+                   ▼
+          ┌─────────────────────────────┐
+          │ Embedding Generation        │
+          │ all-MiniLM-L6-v2            │
+          └─────────────┬───────────────┘
+                        │
+                        ▼
+          ┌─────────────────────────────┐
+          │ FAISS Vector Store          │
+          └─────────────┬───────────────┘
+                        │
+              Query    / \    Query
+                     /     \
+                    ▼       ▼
+              FAISS         BM25
+             Dense Search  Lexical Search
+                    \       /
+                     \     /
+                      ▼   ▼
+                ┌──────────────┐
+                │ RRF Fusion   │
+                └──────┬───────┘
+                       ▼
+                ┌──────────────┐
+                │ Cross-Encoder│
+                │  Reranking   │
+                └──────┬───────┘
+                       ▼
+                ┌──────────────┐
+                │ LLM Answer   │
+                │ + Sources    │
+                └──────────────┘
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                     │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
-│  │  Upload  │ │   Chat   │ │Documents │ │  Analytics   │  │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │
-└─────────────────────┬───────────────────────────────────────┘
-                      │ HTTPS/WebSocket
-┌─────────────────────▼───────────────────────────────────────┐
-│                    Backend (FastAPI)                         │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                   API Routes                          │  │
-│  │  /documents  /query  /analytics  /ws  /system        │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                  RAG Pipeline                         │  │
-│  │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐ │  │
-│  │ │Document  │→│ Chunking │→│Embedding │→│  FAISS  │ │  │
-│  │ │Processor │ │ Service  │ │ Service  │ │  Store  │ │  │
-│  │ └──────────┘ └──────────┘ └──────────┘ └─────────┘ │  │
-│  │                     ↓                                 │  │
-│  │              ┌──────────────┐                        │  │
-│  │              │ LLM Service  │                        │  │
-│  │              │ (Multi-Model)│                        │  │
-│  │              └──────────────┘                        │  │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-         ┌────────────▼──────────┐
-         │     PostgreSQL        │
-         │  ┌─────────────────┐  │
-         │  │ Documents Table │  │
-         │  │ Analytics Table │  │
-         │  │  Query History  │  │
-         │  └─────────────────┘  │
-         └───────────────────────┘
-```
 
-## 🚀 Features
+## RAG Pipeline
 
-### Document Management
-- **Multi-format Support**: PDF, DOCX, TXT, HTML, Markdown
-- **Batch Upload**: Process multiple documents simultaneously  
-- **Smart Text Extraction**: Handles complex layouts, tables, and images
-- **Progress Tracking**: Real-time upload and processing status via WebSocket
+### 1. Document ingestion
 
-### Intelligent Search & Q&A
-- **Semantic Search**: Find relevant information using natural language
-- **Context-Aware Answers**: AI generates responses based on your documents
-- **Source Attribution**: Every answer includes document sources with relevance scores
-- **Conversation Memory**: Maintains context across multiple questions
+Uploaded files are validated, stored, and processed. The backend currently supports:
 
-### Advanced RAG Pipeline
-- **Intelligent Chunking**: 1000-character chunks with 200-character overlap
-- **High-Quality Embeddings**: 
-  - Development: BGE-large-en-v1.5 (1024 dimensions)
-  - Production: all-MiniLM-L6-v2 (384 dimensions)
-- **FAISS Vector Store**: GPU-accelerated similarity search
-- **Multi-LLM Support**: Automatic fallback between providers
+- PDF
+- DOCX
+- TXT
+- HTML
+- Markdown
 
-### Analytics & Monitoring
-- **Usage Statistics**: Track queries, response times, and success rates
-- **Popular Questions**: Identify frequently asked questions
-- **Query Trends**: Visualize usage patterns over time
-- **Performance Metrics**: Monitor embedding and LLM performance
+PDFs are first processed with text extraction and fall back to OCR for image-based documents when OCR dependencies are available.
 
-### Production Features
-- **Rate Limiting**: Configurable per-endpoint limits
-- **CORS Configuration**: Environment-specific origins
-- **Health Checks**: Comprehensive system status endpoints
-- **Error Tracking**: Sentry integration ready
-- **Secure Configuration**: No hardcoded secrets, validation on startup
+### 2. Chunking
 
-## 🛠️ Tech Stack
+Extracted text is normalized and split with a recursive character text splitter using approximately 1000-character chunks and 200-character overlap. Chunk metadata includes document ID, chunk ID, chunk index, and document metadata.
 
-### Backend
-- **Framework**: FastAPI 0.104.1
-- **Database**: PostgreSQL with SQLAlchemy ORM
-- **Vector Store**: FAISS (CPU/GPU)
-- **ML/AI**:
-  - PyTorch 2.1.0
-  - Sentence Transformers 2.2.2
-  - Transformers 4.35.0
-  - LangChain 0.0.340
-- **Document Processing**: 
-  - PDFPlumber
-  - python-docx
-  - BeautifulSoup4
-- **Real-time**: WebSockets
-- **Deployment**: Docker, Railway/Render ready
+### 3. Embeddings
+
+Document and query text are embedded using:
+
+`sentence-transformers/all-MiniLM-L6-v2`
+
+Embeddings are normalized before insertion/search in FAISS so inner-product similarity behaves as cosine similarity.
+
+### 4. Hybrid retrieval
+
+For each query, DocuMind combines:
+
+- Dense semantic retrieval with FAISS.
+- Lexical retrieval with BM25.
+
+The two ranked result sets are merged with Reciprocal Rank Fusion (RRF).
+
+### 5. Reranking
+
+The fused candidate set is reranked with:
+
+`cross-encoder/ms-marco-MiniLM-L-6-v2`
+
+The highest-ranked results are then used as context for answer generation.
+
+### 6. Answer generation
+
+The application sends the retrieved context and user question to the configured LLM provider. The current provider service supports:
+
+- Google Gemini
+- OpenAI
+- Groq
+
+A provider priority/fallback mechanism is implemented so an available provider can be selected when the preferred provider is unavailable.
+
+## Evaluation
+
+RAG quality was evaluated with RAGAS over three evaluation runs, using the reported averages:
+
+| Metric | Average |
+|---|---:|
+| Faithfulness | 91.8% |
+| Answer Relevance | 89.8% |
+
+These evaluation results are external to the current GitHub codebase and are reported here based on the project's evaluation runs.
+
+## Features
+
+### Document management
+
+- Upload one or multiple documents.
+- Track processing status.
+- View document metadata.
+- Preview and access processed document content.
+- Delete documents.
+- Rebuild the vector store from stored documents.
+
+### Search and Q&A
+
+- Semantic + lexical hybrid search.
+- Cross-Encoder reranking.
+- Search within selected documents.
+- Context-aware follow-up questions.
+- Source document attribution.
+- Configurable retrieval and generation parameters.
+
+### Analytics
+
+The backend stores query history and tracks:
+
+- Total queries.
+- Total documents.
+- Average response time.
+- Query/answer history.
+- Basic popularity/similarity tracking.
+
+### Real-time processing
+
+Multi-document uploads can be processed asynchronously with WebSocket progress events for stages such as extraction, chunking, embedding/indexing, completion, and errors.
 
 ### Frontend
-- **Framework**: React 18 with Vite
-- **State Management**: Zustand
-- **Styling**: Tailwind CSS
-- **Animations**: Framer Motion
-- **Charts**: Recharts
-- **HTTP Client**: Axios
-- **UI Components**: Custom glass-morphism design
-- **PWA**: Service workers, offline support
 
-### AI Models & Services
-- **Embedding Models**:
-  - BAAI/bge-large-en-v1.5
-  - sentence-transformers/all-MiniLM-L6-v2
-- **LLM Providers**:
-  - Groq (Llama, Mixtral)
-  - OpenAI (GPT-3.5/4)
-  - Anthropic (Claude)
-  - Local models via Llama.cpp
+The React application provides:
 
-## 📋 Prerequisites
+- Drag-and-drop document uploads.
+- Chat interface.
+- Document management.
+- Analytics dashboard.
+- Settings panel.
+- Lazy loading for non-critical views.
+- PWA/service-worker support.
+- Responsive UI animations and notifications.
+
+## Tech Stack
+
+### Backend
+
+- Python
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- FAISS
+- Sentence Transformers
+- BM25 (`rank-bm25`)
+- Cross-Encoder
+- LangChain text splitters
+- Pydantic
+- WebSockets
+- PyTesseract + pdf2image for OCR
+
+### Frontend
+
+- React
+- Vite
+- React Router
+- Zustand
+- Tailwind CSS
+- Framer Motion
+- Axios
+- Recharts
+- React Dropzone
+- React Markdown
+- Vite PWA plugin
+
+### Deployment
+
+- Docker
+- Uvicorn
+- Railway-compatible backend configuration
+
+## Project Structure
+
+```text
+DocuMind-RAG/
+├── backend/
+│   ├── app/
+│   │   ├── models/
+│   │   ├── routers/
+│   │   ├── services/
+│   │   │   ├── chunking.py
+│   │   │   ├── document_processor.py
+│   │   │   ├── embedding.py
+│   │   │   ├── llm.py
+│   │   │   ├── rag_service.py
+│   │   │   └── vector_store.py
+│   │   ├── utils/
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   └── main.py
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   ├── store/
+│   │   ├── styles/
+│   │   └── App.jsx
+│   └── package.json
+│
+└── README.md
+```
+
+## Local Setup
+
+### Prerequisites
 
 - Python 3.9+
 - Node.js 18+
-- PostgreSQL 13+
-- CUDA 11.8+ (optional, for GPU acceleration)
-- 8GB+ RAM recommended
+- PostgreSQL
+- Git
+- Poppler for PDF OCR workflows
+- Tesseract OCR for image-based PDFs
 
-## 🔧 Installation
+### 1. Clone the repository
 
-### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/documind.git
-cd documind
+git clone https://github.com/praveeshpeddagoni/DocuMind-RAG.git
+cd DocuMind-RAG
 ```
 
-### 2. Backend Setup
+### 2. Configure the backend
 
 ```bash
 cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Setup environment variables
-cp .env.example .env.local
-# Edit .env.local with your configuration
-
-# Initialize database
-python -c "from app.database import init_db; init_db()"
-
-# Run the backend
-python run.py
+python -m venv .venv
 ```
 
-Backend will be available at `http://localhost:8000`
+Activate the virtual environment.
 
-### 3. Frontend Setup
+Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+
+Create `backend/.env`:
+
+```env
+ENVIRONMENT=development
+
+DATABASE_URL=postgresql+psycopg2://postgres:password@localhost:5432/document_qa
+
+GEMINI_API_KEY=your_gemini_key
+OPENAI_API_KEY=your_openai_key
+GROQ_API_KEY=your_groq_key
+
+GEMINI_MODEL=gemini-3.5-flash
+OPENAI_MODEL=gpt-4o
+GROQ_MODEL=llama3-8b-8192
+
+USE_GPU=true
+POPPLER_PATH=/usr/bin
+```
+
+Only the LLM provider keys you plan to use are required.
+
+### 4. Start the backend
+
+From `backend/`:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The API will be available at:
+
+```text
+http://localhost:8000
+```
+
+FastAPI documentation:
+
+```text
+http://localhost:8000/docs
+```
+
+### 5. Start the frontend
+
+Open another terminal:
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Setup environment variables
-cp .env.example .env.local
-# Edit .env.local with your API URL
-
-# Run development server
 npm run dev
 ```
 
-Frontend will be available at `http://localhost:5173`
+Vite will print the local frontend URL in the terminal.
 
-## 🐳 Docker Deployment
+## API Overview
 
-### Using Docker Compose
+The backend exposes API routes under the `/api/v1` prefix.
 
-```bash
-# Build and run all services
-docker-compose up --build
+Important endpoints include:
 
-# Or run in detached mode
-docker-compose up -d
+```text
+POST /api/v1/documents/upload
+POST /api/v1/documents/upload-with-progress
+GET  /api/v1/documents/
+GET  /api/v1/documents/{document_id}
+GET  /api/v1/documents/{document_id}/content
+GET  /api/v1/documents/{document_id}/preview
+DELETE /api/v1/documents/{document_id}
+
+POST /api/v1/documents/search
+POST /api/v1/documents/reset-vector-store
+
+POST /api/v1/query/ask
+POST /api/v1/query/ask-with-context
+POST /api/v1/query/search
+GET  /api/v1/query/history
+
+GET  /api/v1/documents/rag-stats
 ```
 
-### Individual Containers
+The exact available analytics/system endpoints can be inspected from the FastAPI OpenAPI documentation at `/docs`.
+
+## Upload Limits
+
+The backend currently enforces a maximum upload size of **20 MB per file**.
+
+Supported extensions:
+
+```text
+.pdf
+.docx
+.txt
+.html
+.md
+```
+
+## Persistence
+
+The application stores:
+
+- Original documents on disk.
+- Processed text on disk.
+- FAISS index data on disk.
+- Chunk metadata alongside the vector store.
+- Application metadata and query analytics in PostgreSQL.
+
+The production configuration uses `/tmp/documind` for application data paths, so persistent storage should be configured appropriately for the deployment environment.
+
+## Docker
+
+The backend includes a production Dockerfile.
+
+Build:
 
 ```bash
-# Backend
 cd backend
 docker build -t documind-backend .
+```
+
+Run:
+
+```bash
 docker run -p 8000:8000 --env-file .env documind-backend
-
-# Frontend
-cd frontend
-docker build -t documind-frontend .
-docker run -p 80:80 documind-frontend
 ```
 
-## ☁️ Cloud Deployment
+The container starts FastAPI with Uvicorn on port `8000`.
 
-### Railway
+## Production Deployment Notes
 
-1. **Backend Deployment**:
-```bash
-# In backend directory
-railway login
-railway link
-railway up
-```
+The repository contains deployment configuration for a Railway-style backend deployment.
 
-2. **Set Environment Variables**:
-```bash
-railway variables set SECRET_KEY=<your-secret>
-railway variables set DATABASE_URL=<auto-provided>
-railway variables set GROQ_API_KEY=<your-key>
-```
+For production:
 
-3. **Frontend Deployment**:
-```bash
-# In frontend directory
-railway link
-railway variables set VITE_API_URL=<backend-url>
-railway up
-```
+1. Set `ENVIRONMENT=production`.
+2. Provide a production `DATABASE_URL`.
+3. Configure the required LLM API keys.
+4. Provide persistent storage for uploaded documents and vector-store data when required.
+5. Configure the frontend origin instead of using a permissive CORS configuration.
+6. Verify OCR system dependencies (Tesseract and Poppler) in the deployment image.
 
-### Environment Variables
+The current backend production configuration intentionally disables GPU usage and uses CPU execution.
 
-#### Backend (.env)
-```env
-# Security
-SECRET_KEY=your-secret-key-here
-JWT_SECRET_KEY=your-jwt-secret
+## Testing
 
-# Database
-DATABASE_URL=postgresql://user:pass@localhost/dbname
+The backend requirements include tooling for:
 
-# LLM Providers (at least one required)
-GROQ_API_KEY=gsk_...
-OPENAI_API_KEY=sk-...
+- Pytest
+- Async API testing
+- Coverage
 
-# Features
-ENABLE_GPU=false
-ENABLE_STREAMING=true
-RATE_LIMIT_ENABLED=true
-
-# CORS (production)
-CORS_ORIGINS=https://your-domain.com
-```
-
-#### Frontend (.env)
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-## 📖 API Documentation
-
-### Core Endpoints
-
-#### Document Management
-```http
-POST   /api/v1/documents/upload          # Upload document
-GET    /api/v1/documents/                # List documents
-GET    /api/v1/documents/{id}            # Get document
-DELETE /api/v1/documents/{id}            # Delete document
-POST   /api/v1/documents/search          # Semantic search
-```
-
-#### Query & Chat
-```http
-POST   /api/v1/query/ask                 # Ask question
-GET    /api/v1/query/history             # Get query history
-POST   /api/v1/query/search              # Search documents
-```
-
-#### Analytics
-```http
-GET    /api/v1/analytics/stats           # Usage statistics
-GET    /api/v1/analytics/popular-questions  # Popular queries
-GET    /api/v1/analytics/query-trends    # Query trends
-```
-
-#### WebSocket
-```ws
-WS     /ws/client/{client_id}            # Real-time updates
-```
-
-### Example: Ask a Question
-
-```python
-import requests
-
-# Upload a document
-with open("document.pdf", "rb") as f:
-    response = requests.post(
-        "http://localhost:8000/api/v1/documents/upload",
-        files={"file": f}
-    )
-doc_id = response.json()["id"]
-
-# Ask a question
-response = requests.post(
-    "http://localhost:8000/api/v1/query/ask",
-    json={
-        "question": "What are the main findings?",
-        "document_ids": [doc_id],
-        "top_k": 5
-    }
-)
-
-print(response.json()["answer"])
-```
-
-## 🎮 Usage Guide
-
-### 1. Upload Documents
-- Navigate to Upload tab
-- Drag & drop or select files
-- Supported: PDF, Word, Text, HTML, Markdown
-- Max size: 20MB per file
-
-### 2. Ask Questions
-- Go to Chat tab
-- Type your question naturally
-- Optional: Select specific documents to search
-- Get AI-powered answers with sources
-
-### 3. View Analytics
-- Check Analytics tab for insights
-- Monitor usage patterns
-- Track popular questions
-- Export data as JSON
-
-## ⚡ Performance
-
-### Benchmarks (RTX 4050 GPU)
-
-| Operation | GPU Time | CPU Time | Speedup |
-|-----------|----------|----------|---------|
-| Embedding Generation | 0.03s | 0.15s | 5x |
-| Vector Search (10K docs) | 0.001s | 0.008s | 8x |
-| Document Processing | 0.5s | 2.1s | 4.2x |
-
-### Optimization Tips
-
-1. **GPU Acceleration**: Install CUDA for 5-10x performance boost
-2. **Batch Processing**: Upload multiple documents together
-3. **Caching**: Enable Redis for frequently asked questions
-4. **Model Selection**: Use smaller models in production for cost
-
-## 🧪 Testing
+Run tests from the backend directory:
 
 ```bash
-# Backend tests
-cd backend
-pytest tests/ -v --cov=app
-
-# Frontend tests
-cd frontend
-npm run test
+pytest
 ```
 
-## 🐛 Troubleshooting
+Run with coverage:
 
-### Common Issues
+```bash
+pytest --cov=app
+```
 
-1. **CUDA not available**
-   - Install CUDA Toolkit 11.8+
-   - Use `pip install faiss-gpu-cu11`
+## Design Notes
 
-2. **Out of memory**
-   - Reduce `CHUNK_SIZE` in config
-   - Use smaller embedding model
-   - Enable CPU-only mode
+The core retrieval path is intentionally hybrid:
 
-3. **Slow processing**
-   - Check GPU availability
-   - Reduce concurrent uploads
-   - Use production config
+```text
+Query
+  ↓
+FAISS semantic search
+  +
+BM25 lexical search
+  ↓
+Reciprocal Rank Fusion
+  ↓
+Cross-Encoder reranking
+  ↓
+Top context chunks
+  ↓
+LLM generation
+  ↓
+Answer + sources
+```
 
-## 🤝 Contributing
+This combination is designed to capture both semantic similarity and exact lexical matches before the final reranking stage.
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## Known Implementation Notes
 
-## 🙏 Acknowledgments
+- The backend currently supports a 20 MB upload limit even though some frontend text still references 50 MB. The backend limit is authoritative.
+- Query-answer generation is provider-configurable, while Gemini is the default provider priority in the current service.
+- Evaluation scores in this README are from external RAGAS evaluation runs and are not generated by the current GitHub application at runtime.
 
-- FastAPI for the amazing web framework
-- Sentence Transformers for embeddings
-- Meta AI for FAISS
-- All open-source contributors
+## License
 
-## 📞 Contact
-
-**Sai** - [Email](jokerbj2841@gmail.com)
-
-Project Link: [https://github.com/Joker2841/document-qa-rag-new](https://github.com/Joker2841/document-qa-rag-new)
-
----
-
-<div align="center">
-Built with ❤️ using FastAPI and React
-</div>
+Add the project's preferred license here before publishing under an explicit open-source license.
